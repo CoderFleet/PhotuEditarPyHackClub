@@ -1,5 +1,5 @@
 import argparse
-from PIL import Image, ImageOps, ImageEnhance, ImageFilter, ImageDraw, ImageFont
+from PIL import Image, ImageOps, ImageEnhance, ImageFilter, ImageDraw, ImageFont, ImageChops, ImageCms
 
 def load_image(image_path):
     try:
@@ -71,6 +71,25 @@ def add_watermark(image, watermark, position):
     image.paste(watermark_image, position, watermark_image)
     return image
 
+def equalize_histogram(image):
+    return ImageOps.equalize(image)
+
+def invert_colors(image):
+    return ImageOps.invert(image)
+
+def blend_images(image1, image2, alpha):
+    image2 = image2.resize(image1.size)
+    return Image.blend(image1, image2, alpha)
+
+def apply_color_transform(image, matrix):
+    return image.convert("RGB", matrix)
+
+def handle_different_formats(image, format):
+    output = io.BytesIO()
+    image.save(output, format=format)
+    output.seek(0)
+    return Image.open(output)
+
 def main():
     parser = argparse.ArgumentParser(description="Command Line Photo Editor")
     parser.add_argument("input", type=str, help="Path to the input image")
@@ -93,6 +112,12 @@ def main():
     parser.add_argument("--text_color", type=str, metavar='font_color', help="Font color of the text overlay")
     parser.add_argument("--watermark", type=str, metavar='watermark_path', help="Add a watermark to the image")
     parser.add_argument("--watermark_position", type=int, nargs=2, metavar=('x', 'y'), help="Position of the watermark")
+    parser.add_argument("--equalize", action='store_true', help="Equalize the image histogram")
+    parser.add_argument("--invert", action='store_true', help="Invert the colors of the image")
+    parser.add_argument("--blend", type=str, metavar='blend_image_path', help="Blend the input image with another image")
+    parser.add_argument("--blend_alpha", type=float, metavar='alpha', help="Alpha value for blending images")
+    parser.add_argument("--color_transform", type=float, nargs=12, metavar='matrix', help="Apply a color transformation matrix to the image")
+    parser.add_argument("--format", type=str, choices=['JPEG', 'PNG', 'BMP', 'GIF'], help="Convert the image to the specified format")
     args = parser.parse_args()
 
     image = load_image(args.input)
@@ -131,6 +156,27 @@ def main():
                 image = add_watermark(image, args.watermark, tuple(args.watermark_position))
             else:
                 print("Error: To add a watermark, you must specify --watermark_position")
+        if args.equalize:
+            image = equalize_histogram(image)
+        if args.invert:
+            image = invert_colors(image)
+        if args.blend:
+            if args.blend_alpha:
+                blend_image = load_image(args.blend)
+                if blend_image:
+                    image = blend_images(image, blend_image, args.blend_alpha)
+                else:
+                    print("Error: Could not load blend image")
+            else:
+                print("Error: To blend images, you must specify --blend_alpha")
+        if args.color_transform:
+            if len(args.color_transform) == 12:
+                matrix = tuple(args.color_transform)
+                image = apply_color_transform(image, matrix)
+            else:
+                print("Error: Color transform matrix must have 12 elements")
+        if args.format:
+            image = handle_different_formats(image, args.format)
         save_image(image, args.output)
 
 if __name__ == "__main__":
