@@ -69,9 +69,13 @@ def add_text(image, text, position, font_size, font_color):
     return image
 
 def add_watermark(image, watermark, position):
-    watermark_image = Image.open(watermark).convert("RGBA")
-    image.paste(watermark_image, position, watermark_image)
-    return image
+    try:
+        watermark_image = Image.open(watermark).convert("RGBA")
+        image.paste(watermark_image, position, watermark_image)
+        return image
+    except Exception as e:
+        print(f"Error adding watermark: {e}")
+        return image
 
 def equalize_histogram(image):
     return ImageOps.equalize(image)
@@ -91,6 +95,16 @@ def handle_different_formats(image, format):
     image.save(output, format=format)
     output.seek(0)
     return Image.open(output)
+
+def validate_args(args):
+    if args.resize and (len(args.resize) != 2 or not all(isinstance(x, int) for x in args.resize)):
+        raise ValueError("Invalid --resize values. Provide two integer values for width and height.")
+    if args.crop and (len(args.crop) != 4 or not all(isinstance(x, int) for x in args.crop)):
+        raise ValueError("Invalid --crop values. Provide four integer values for left, upper, right, and lower.")
+    if args.text_position and (len(args.text_position) != 2 or not all(isinstance(x, int) for x in args.text_position)):
+        raise ValueError("Invalid --text_position values. Provide two integer values for x and y.")
+    if args.color_transform and (len(args.color_transform) != 12 or not all(isinstance(x, float) for x in args.color_transform)):
+        raise ValueError("Invalid --color_transform values. Provide twelve float values for the matrix.")
 
 def process_image(image, args):
     if args.resize:
@@ -161,9 +175,12 @@ def process_directory(input_dir, output_dir, args):
             output_path = os.path.join(output_dir, file_name)
             image = load_image(input_path)
             if image:
-                processed_image = process_image(image, args)
-                save_image(processed_image, output_path)
-                summary.append(f"Processed: {file_name}")
+                try:
+                    processed_image = process_image(image, args)
+                    save_image(processed_image, output_path)
+                    summary.append(f"Processed: {file_name}")
+                except Exception as e:
+                    print(f"Error processing {file_name}: {e}")
 
     if summary:
         print("\nSummary Report:")
@@ -171,7 +188,16 @@ def process_directory(input_dir, output_dir, args):
             print(entry)
 
 def main():
-    parser = argparse.ArgumentParser(description="Command Line Photo Editor")
+    parser = argparse.ArgumentParser(
+        description="Command Line Photo Editor",
+        epilog="""Author: Your Name
+        This tool allows you to perform various image processing operations from the command line. 
+        You can resize, rotate, crop, and apply various filters and effects to images. 
+        For batch processing, specify a directory as input and output, and use --batch flag.
+        Usage examples:
+        python photo_editor.py input_image.jpg output_image.jpg --resize 800 600 --blur 2
+        python photo_editor.py input_directory output_directory --batch --resize 1024 768 --sharpen"""
+    )
     parser.add_argument("input", type=str, help="Path to the input image or directory")
     parser.add_argument("output", type=str, help="Path to save the output image or directory")
     parser.add_argument("--resize", type=int, nargs=2, metavar=('width', 'height'), help="Resize the image to the specified width and height")
@@ -199,15 +225,22 @@ def main():
     parser.add_argument("--color_transform", type=float, nargs=12, metavar='matrix', help="Apply a color transformation matrix to the image")
     parser.add_argument("--format", type=str, choices=['JPEG', 'PNG', 'BMP', 'GIF'], help="Convert the image to the specified format")
     parser.add_argument("--batch", action='store_true', help="Process all images in the input directory")
+
     args = parser.parse_args()
 
-    if os.path.isdir(args.input) and args.batch:
-        process_directory(args.input, args.output, args)
-    else:
-        image = load_image(args.input)
-        if image:
-            processed_image = process_image(image, args)
-            save_image(processed_image, args.output)
+    try:
+        validate_args(args)
+        if os.path.isdir(args.input) and args.batch:
+            process_directory(args.input, args.output, args)
+        else:
+            image = load_image(args.input)
+            if image:
+                processed_image = process_image(image, args)
+                save_image(processed_image, args.output)
+    except ValueError as ve:
+        print(f"Argument Error: {ve}")
+    except Exception as e:
+        print(f"Unexpected Error: {e}")
 
 if __name__ == "__main__":
     main()
