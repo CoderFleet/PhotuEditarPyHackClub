@@ -25,6 +25,9 @@ class ImageEditorApp:
         self.shape_start_y = None
         self.font_style = "arial.ttf"
         self.font_size = 20
+        self.line_start_x = None
+        self.line_start_y = None
+        self.selected_color = "#000000"
 
         self.create_widgets()
 
@@ -66,6 +69,9 @@ class ImageEditorApp:
         edit_menu.add_command(label="Apply Gaussian Blur More", command=self.apply_gaussian_blur_more)
         edit_menu.add_command(label="Draw Rectangle", command=self.initiate_rectangle_draw)
         edit_menu.add_command(label="Draw Ellipse", command=self.initiate_ellipse_draw)
+        edit_menu.add_command(label="Draw Line", command=self.initiate_line_draw)
+        edit_menu.add_command(label="Undo", command=self.undo)
+        edit_menu.add_command(label="Redo", command=self.redo)
 
         self.canvas = tk.Canvas(self.root, bg='white')
         self.canvas.pack(fill=tk.BOTH, expand=True)
@@ -192,8 +198,8 @@ class ImageEditorApp:
             x = simpledialog.askinteger("Add Text", "Enter x coordinate for text:")
             y = simpledialog.askinteger("Add Text", "Enter y coordinate for text:")
             color = colorchooser.askcolor()[1]
-            font_style = simpledialog.askstring("Add Text", "Enter font style (e.g., 'arial.ttf'):", initialvalue=self.font_style)
-            font_size = simpledialog.askinteger("Add Text", "Enter font size:", initialvalue=self.font_size)
+            font_style = simpledialog.askstring("Font Style", "Enter font style (default: arial.ttf):", initialvalue=self.font_style)
+            font_size = simpledialog.askinteger("Font Size", "Enter font size (default: 20):", initialvalue=self.font_size)
             if text and x is not None and y is not None and color:
                 self.push_undo()
                 draw = ImageDraw.Draw(self.image)
@@ -261,6 +267,7 @@ class ImageEditorApp:
             color = self.image.getpixel((x, y))
             self.color_picker_start = color
             color_hex = "#%02x%02x%02x" % color
+            self.selected_color = color_hex
             self.update_status(f"Picked color: {color_hex}")
             self.canvas.unbind("<Button-1>")
 
@@ -366,12 +373,76 @@ class ImageEditorApp:
             self.canvas.delete("rectangle")
             self.canvas.create_rectangle(self.shape_start_x, self.shape_start_y, event.x, event.y, outline="blue", tag="rectangle")
 
+    def on_rectangle_end(self, event):
+        if self.image:
+            self.canvas.delete("rectangle")
+            end_x, end_y = event.x, event.y
+            draw = ImageDraw.Draw(self.image)
+            draw.rectangle([self.shape_start_x, self.shape_start_y, end_x, end_y], outline="blue", width=3)
+            self.display_image()
+            self.update_status(f"Drew rectangle from ({self.shape_start_x}, {self.shape_start_y}) to ({end_x}, {end_y})")
+            self.canvas.unbind("<ButtonPress-1>")
+            self.canvas.unbind("<B1-Motion>")
+            self.canvas.unbind("<ButtonRelease-1>")
 
+    def initiate_ellipse_draw(self):
+        self.canvas.bind("<ButtonPress-1>", self.on_ellipse_start)
+        self.canvas.bind("<B1-Motion>", self.on_ellipse_draw)
+        self.canvas.bind("<ButtonRelease-1>", self.on_ellipse_end)
+
+    def on_ellipse_start(self, event):
+        if self.image:
+            self.shape_start_x = event.x
+            self.shape_start_y = event.y
+
+    def on_ellipse_draw(self, event):
+        if self.image:
+            self.canvas.delete("ellipse")
+            self.canvas.create_oval(self.shape_start_x, self.shape_start_y, event.x, event.y, outline="green", tag="ellipse")
+
+    def on_ellipse_end(self, event):
+        if self.image:
+            self.canvas.delete("ellipse")
+            end_x, end_y = event.x, event.y
+            draw = ImageDraw.Draw(self.image)
+            draw.ellipse([self.shape_start_x, self.shape_start_y, end_x, end_y], outline="green", width=3)
+            self.display_image()
+            self.update_status(f"Drew ellipse from ({self.shape_start_x}, {self.shape_start_y}) to ({end_x}, {end_y})")
+            self.canvas.unbind("<ButtonPress-1>")
+            self.canvas.unbind("<B1-Motion>")
+            self.canvas.unbind("<ButtonRelease-1>")
+
+    def initiate_line_draw(self):
+        self.canvas.bind("<ButtonPress-1>", self.on_line_start)
+        self.canvas.bind("<B1-Motion>", self.on_line_draw)
+        self.canvas.bind("<ButtonRelease-1>", self.on_line_end)
+
+    def on_line_start(self, event):
+        if self.image:
+            self.line_start_x = event.x
+            self.line_start_y = event.y
+
+    def on_line_draw(self, event):
+        if self.image:
+            self.canvas.delete("line")
+            self.canvas.create_line(self.line_start_x, self.line_start_y, event.x, event.y, fill="red", tag="line")
+
+    def on_line_end(self, event):
+        if self.image:
+            self.canvas.delete("line")
+            end_x, end_y = event.x, event.y
+            draw = ImageDraw.Draw(self.image)
+            draw.line([self.line_start_x, self.line_start_y, end_x, end_y], fill="red", width=3)
+            self.display_image()
+            self.update_status(f"Drew line from ({self.line_start_x}, {self.line_start_y}) to ({end_x}, {end_y})")
+            self.canvas.unbind("<ButtonPress-1>")
+            self.canvas.unbind("<B1-Motion>")
+            self.canvas.unbind("<ButtonRelease-1>")
 
     def push_undo(self):
-        if self.image:
-            self.undo_stack.append(self.image.copy())
-            self.redo_stack.clear()
+        self.undo_stack.append(self.image.copy())
+        if len(self.undo_stack) > 20:
+            self.undo_stack.popleft()
 
     def undo(self):
         if self.undo_stack:
@@ -379,6 +450,8 @@ class ImageEditorApp:
             self.image = self.undo_stack.pop()
             self.display_image()
             self.update_status("Undid last action")
+        else:
+            self.update_status("Nothing to undo")
 
     def redo(self):
         if self.redo_stack:
@@ -386,6 +459,8 @@ class ImageEditorApp:
             self.image = self.redo_stack.pop()
             self.display_image()
             self.update_status("Redid last undone action")
+        else:
+            self.update_status("Nothing to redo")
 
 if __name__ == "__main__":
     root = tk.Tk()
