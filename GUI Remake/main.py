@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, simpledialog
 from PIL import Image, ImageTk
 
 class ImageEditorApp:
@@ -9,6 +9,7 @@ class ImageEditorApp:
         self.root.geometry("800x600")
 
         self.image = None
+        self.tk_image = None
         self.image_label = None
 
         self.create_widgets()
@@ -21,6 +22,11 @@ class ImageEditorApp:
         menu_bar.add_cascade(label="File", menu=file_menu)
         file_menu.add_command(label="Open", command=self.open_image)
         file_menu.add_command(label="Exit", command=self.root.quit)
+
+        edit_menu = tk.Menu(menu_bar, tearoff=0)
+        menu_bar.add_cascade(label="Edit", menu=edit_menu)
+        edit_menu.add_command(label="Resize", command=self.resize_image)
+        edit_menu.add_command(label="Rotate", command=self.rotate_image)
 
         self.canvas = tk.Canvas(self.root, bg='white')
         self.canvas.pack(fill=tk.BOTH, expand=True)
@@ -38,6 +44,21 @@ class ImageEditorApp:
                 self.image_label.destroy()
             self.image_label = tk.Label(self.canvas, image=self.tk_image)
             self.image_label.pack()
+
+    def resize_image(self):
+        if self.image:
+            width = simpledialog.askinteger("Resize", "Enter new width:")
+            height = simpledialog.askinteger("Resize", "Enter new height:")
+            if width and height:
+                self.image = self.image.resize((width, height))
+                self.display_image()
+
+    def rotate_image(self):
+        if self.image:
+            angle = simpledialog.askinteger("Rotate", "Enter rotation angle:")
+            if angle is not None:
+                self.image = self.image.rotate(angle)
+                self.display_image()
 
 if __name__ == "__main__":
     root = tk.Tk()
