@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import filedialog, simpledialog, messagebox, colorchooser, font as tkfont
-from PIL import Image, ImageTk, ImageOps, ImageEnhance, ImageDraw, ImageFont
+from PIL import Image, ImageTk, ImageOps, ImageEnhance, ImageDraw, ImageFont, ImageFilter
 
 class ImageEditorApp:
     def __init__(self, root):
@@ -38,6 +38,11 @@ class ImageEditorApp:
         edit_menu.add_command(label="Reset", command=self.reset_image)
         edit_menu.add_command(label="Crop", command=self.initiate_crop)
         edit_menu.add_command(label="Add Text", command=self.add_text)
+        edit_menu.add_command(label="Apply Blur", command=self.apply_blur)
+        edit_menu.add_command(label="Apply Sharpen", command=self.apply_sharpen)
+        edit_menu.add_command(label="Adjust Brightness", command=self.adjust_brightness)
+        edit_menu.add_command(label="Adjust Contrast", command=self.adjust_contrast)
+        edit_menu.add_command(label="Adjust Color Balance", command=self.adjust_color_balance)
 
         self.canvas = tk.Canvas(self.root, bg='white')
         self.canvas.pack(fill=tk.BOTH, expand=True)
@@ -159,6 +164,52 @@ class ImageEditorApp:
                 draw.text((x, y), text, fill=color, font=font)
                 self.display_image()
                 self.update_status(f"Added text: '{text}' at ({x}, {y})")
+
+    def apply_blur(self):
+        if self.image:
+            radius = simpledialog.askfloat("Blur", "Enter blur radius:", minvalue=0.0)
+            if radius is not None:
+                self.image = self.image.filter(ImageFilter.GaussianBlur(radius))
+                self.display_image()
+                self.update_status(f"Applied blur with radius {radius}")
+
+    def apply_sharpen(self):
+        if self.image:
+            self.image = self.image.filter(ImageFilter.SHARPEN)
+            self.display_image()
+            self.update_status("Applied sharpen filter")
+
+    def adjust_brightness(self):
+        if self.image:
+            brightness = simpledialog.askfloat("Brightness", "Enter brightness factor (1.0 for no change):", minvalue=0.0)
+            if brightness is not None:
+                enhancer = ImageEnhance.Brightness(self.image)
+                self.image = enhancer.enhance(brightness)
+                self.display_image()
+                self.update_status(f"Brightness adjusted by factor {brightness}")
+
+    def adjust_contrast(self):
+        if self.image:
+            contrast = simpledialog.askfloat("Contrast", "Enter contrast factor (1.0 for no change):", minvalue=0.0)
+            if contrast is not None:
+                enhancer = ImageEnhance.Contrast(self.image)
+                self.image = enhancer.enhance(contrast)
+                self.display_image()
+                self.update_status(f"Contrast adjusted by factor {contrast}")
+
+    def adjust_color_balance(self):
+        if self.image:
+            red = simpledialog.askfloat("Color Balance", "Enter red balance (1.0 for no change):", minvalue=0.0)
+            green = simpledialog.askfloat("Color Balance", "Enter green balance (1.0 for no change):", minvalue=0.0)
+            blue = simpledialog.askfloat("Color Balance", "Enter blue balance (1.0 for no change):", minvalue=0.0)
+            if red is not None and green is not None and blue is not None:
+                r, g, b = self.image.split()
+                r = r.point(lambda i: i * red)
+                g = g.point(lambda i: i * green)
+                b = b.point(lambda i: i * blue)
+                self.image = Image.merge("RGB", (r, g, b))
+                self.display_image()
+                self.update_status(f"Adjusted color balance: red={red}, green={green}, blue={blue}")
 
 if __name__ == "__main__":
     root = tk.Tk()
