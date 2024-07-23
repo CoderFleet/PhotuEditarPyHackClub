@@ -1,6 +1,6 @@
 import tkinter as tk
-from tkinter import filedialog, simpledialog, messagebox
-from PIL import Image, ImageTk, ImageOps, ImageEnhance
+from tkinter import filedialog, simpledialog, messagebox, colorchooser, font as tkfont
+from PIL import Image, ImageTk, ImageOps, ImageEnhance, ImageDraw, ImageFont
 
 class ImageEditorApp:
     def __init__(self, root):
@@ -12,6 +12,10 @@ class ImageEditorApp:
         self.original_image = None
         self.tk_image = None
         self.image_label = None
+        self.crop_start_x = None
+        self.crop_start_y = None
+        self.crop_end_x = None
+        self.crop_end_y = None
 
         self.create_widgets()
 
@@ -32,6 +36,8 @@ class ImageEditorApp:
         edit_menu.add_command(label="Grayscale", command=self.apply_grayscale)
         edit_menu.add_command(label="Increase Contrast", command=self.increase_contrast)
         edit_menu.add_command(label="Reset", command=self.reset_image)
+        edit_menu.add_command(label="Crop", command=self.initiate_crop)
+        edit_menu.add_command(label="Add Text", command=self.add_text)
 
         self.canvas = tk.Canvas(self.root, bg='white')
         self.canvas.pack(fill=tk.BOTH, expand=True)
@@ -103,6 +109,56 @@ class ImageEditorApp:
                 self.image.save(file_path)
                 messagebox.showinfo("Save Image", "Image saved successfully!")
                 self.update_status(f"Saved: {file_path}")
+
+    def initiate_crop(self):
+        self.canvas.bind("<ButtonPress-1>", self.on_crop_start)
+        self.canvas.bind("<B1-Motion>", self.on_crop_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.on_crop_end)
+
+    def on_crop_start(self, event):
+        if self.image:
+            self.crop_start_x = event.x
+            self.crop_start_y = event.y
+
+    def on_crop_drag(self, event):
+        if self.image:
+            self.crop_end_x = event.x
+            self.crop_end_y = event.y
+            self.canvas.delete("crop")
+            self.canvas.create_rectangle(self.crop_start_x, self.crop_start_y, self.crop_end_x, self.crop_end_y, outline="red", tag="crop")
+
+    def on_crop_end(self, event):
+        if self.image:
+            self.crop_end_x = event.x
+            self.crop_end_y = event.y
+            self.crop_image()
+
+    def crop_image(self):
+        if self.image and self.crop_start_x is not None and self.crop_end_x is not None:
+            left = min(self.crop_start_x, self.crop_end_x)
+            top = min(self.crop_start_y, self.crop_end_y)
+            right = max(self.crop_start_x, self.crop_end_x)
+            bottom = max(self.crop_start_y, self.crop_end_y)
+            self.image = self.image.crop((left, top, right, bottom))
+            self.display_image()
+            self.update_status(f"Cropped to box ({left}, {top}, {right}, {bottom})")
+            self.canvas.unbind("<ButtonPress-1>")
+            self.canvas.unbind("<B1-Motion>")
+            self.canvas.unbind("<ButtonRelease-1>")
+
+    def add_text(self):
+        if self.image:
+            text = simpledialog.askstring("Add Text", "Enter text to add:")
+            x = simpledialog.askinteger("Add Text", "Enter x coordinate for text:")
+            y = simpledialog.askinteger("Add Text", "Enter y coordinate for text:")
+            color = colorchooser.askcolor()[1]
+            font_size = simpledialog.askinteger("Add Text", "Enter font size:", initialvalue=20)
+            if text and x is not None and y is not None and color and font_size:
+                draw = ImageDraw.Draw(self.image)
+                font = ImageFont.truetype("arial.ttf", font_size) if ImageFont.truetype else ImageFont.load_default()
+                draw.text((x, y), text, fill=color, font=font)
+                self.display_image()
+                self.update_status(f"Added text: '{text}' at ({x}, {y})")
 
 if __name__ == "__main__":
     root = tk.Tk()
