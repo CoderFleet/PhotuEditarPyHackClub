@@ -53,6 +53,10 @@ class ImageEditorApp:
         edit_menu.add_command(label="Invert Colors", command=self.invert_colors)
         edit_menu.add_command(label="Undo", command=self.undo)
         edit_menu.add_command(label="Redo", command=self.redo)
+        edit_menu.add_command(label="Flip Horizontal", command=self.flip_horizontal)
+        edit_menu.add_command(label="Flip Vertical", command=self.flip_vertical)
+        edit_menu.add_command(label="Rotate 90 CW", command=self.rotate_90_cw)
+        edit_menu.add_command(label="Rotate 90 CCW", command=self.rotate_90_ccw)
 
         self.canvas = tk.Canvas(self.root, bg='white')
         self.canvas.pack(fill=tk.BOTH, expand=True)
@@ -274,6 +278,57 @@ class ImageEditorApp:
 
     def invert_colors(self):
         if self.image:
+            self.push_undo()
+            self.image = ImageOps.invert(self.image)
+            self.display_image()
+            self.update_status("Inverted colors")
+
+    def flip_horizontal(self):
+        if self.image:
+            self.push_undo()
+            self.image = self.image.transpose(Image.FLIP_LEFT_RIGHT)
+            self.display_image()
+            self.update_status("Flipped horizontally")
+
+    def flip_vertical(self):
+        if self.image:
+            self.push_undo()
+            self.image = self.image.transpose(Image.FLIP_TOP_BOTTOM)
+            self.display_image()
+            self.update_status("Flipped vertically")
+
+    def rotate_90_cw(self):
+        if self.image:
+            self.push_undo()
+            self.image = self.image.rotate(-90, expand=True)
+            self.display_image()
+            self.update_status("Rotated 90 degrees clockwise")
+
+    def rotate_90_ccw(self):
+        if self.image:
+            self.push_undo()
+            self.image = self.image.rotate(90, expand=True)
+            self.display_image()
+            self.update_status("Rotated 90 degrees counterclockwise")
+
+    def push_undo(self):
+        if self.image:
+            self.undo_stack.append(self.image.copy())
+            self.redo_stack.clear()
+
+    def undo(self):
+        if self.undo_stack:
+            self.redo_stack.append(self.image.copy())
+            self.image = self.undo_stack.pop()
+            self.display_image()
+            self.update_status("Undid last action")
+
+    def redo(self):
+        if self.redo_stack:
+            self.undo_stack.append(self.image.copy())
+            self.image = self.redo_stack.pop()
+            self.display_image()
+            self.update_status("Redid last undone action")
 
 if __name__ == "__main__":
     root = tk.Tk()
