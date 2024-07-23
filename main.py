@@ -2,6 +2,7 @@ import os
 import io
 import argparse
 from PIL import Image, ImageOps, ImageEnhance, ImageFilter, ImageDraw, ImageFont, ImageChops, ImageCms
+import matplotlib.pyplot as plt
 
 def load_image(image_path):
     try:
@@ -96,6 +97,35 @@ def handle_different_formats(image, format):
     output.seek(0)
     return Image.open(output)
 
+def overlay_image(base_image, overlay_image, position, opacity):
+    overlay = Image.open(overlay_image).convert("RGBA")
+    overlay = overlay.resize((base_image.size[0], base_image.size[1]), Image.ANTIALIAS)
+    base_image = base_image.convert("RGBA")
+    blended = Image.blend(base_image, overlay, opacity)
+    return blended.convert("RGB")
+
+def display_histogram(image):
+    image_array = ImageOps.grayscale(image)
+    plt.hist(image_array.getdata(), bins=256, range=(0, 256), density=True, color='black')
+    plt.xlabel('Pixel Value')
+    plt.ylabel('Frequency')
+    plt.title('Image Histogram')
+    plt.show()
+
+def apply_filter(image, filter_name):
+    filters = {
+        'emboss': ImageFilter.EMBOSS,
+        'contour': ImageFilter.CONTOUR,
+        'find_edges': ImageFilter.FIND_EDGES,
+        'detail': ImageFilter.DETAIL,
+        'edge_enhance_more': ImageFilter.EDGE_ENHANCE_MORE
+    }
+    if filter_name in filters:
+        return image.filter(filters[filter_name])
+    else:
+        print(f"Unknown filter: {filter_name}")
+        return image
+
 def validate_args(args):
     if args.resize and (len(args.resize) != 2 or not all(isinstance(x, int) for x in args.resize)):
         raise ValueError("Invalid --resize values. Provide two integer values for width and height.")
@@ -105,6 +135,8 @@ def validate_args(args):
         raise ValueError("Invalid --text_position values. Provide two integer values for x and y.")
     if args.color_transform and (len(args.color_transform) != 12 or not all(isinstance(x, float) for x in args.color_transform)):
         raise ValueError("Invalid --color_transform values. Provide twelve float values for the matrix.")
+    if args.overlay and not os.path.exists(args.overlay):
+        raise ValueError("Invalid --overlay value. The specified file does not exist.")
 
 def process_image(image, args):
     if args.resize:
@@ -162,6 +194,15 @@ def process_image(image, args):
             print("Error: Color transform matrix must have 12 elements")
     if args.format:
         image = handle_different_formats(image, args.format)
+    if args.overlay:
+        if args.overlay_opacity is not None:
+            image = overlay_image(image, args.overlay, (0, 0), args.overlay_opacity)
+        else:
+            print("Error: To overlay images, you must specify --overlay_opacity")
+    if args.histogram:
+        display_histogram(image)
+    if args.filter:
+        image = apply_filter(image, args.filter)
     return image
 
 def process_directory(input_dir, output_dir, args):
@@ -169,44 +210,54 @@ def process_directory(input_dir, output_dir, args):
         os.makedirs(output_dir)
 
     summary = []
-    for file_name in os.listdir(input_dir):
-        if file_name.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
-            input_path = os.path.join(input_dir, file_name)
-            output_path = os.path.join(output_dir, file_name)
-            image = load_image(input_path)
-            if image:
-                try:
-                    processed_image = process_image(image, args)
-                    save_image(processed_image, output_path)
-                    summary.append(f"Processed: {file_name}")
-                except Exception as e:
-                    print(f"Error processing {file_name}: {e}")
+    log_file = os.path.join(output_dir, "processing_log.txt")
+    with open(log_file, "w") as log:
+        for file_name in os.listdir(input_dir):
+            if file_name.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
+                input_path = os.path.join(input_dir, file_name)
+                output_path = os.path.join(output_dir, file_name)
+                image = load_image(input_path)
+                if image:
+                    try:
+                        processed_image = process_image(image, args)
+                        save_image(processed_image, output_path)
+                        summary.append(f"Processed: {file_name}")
+                        log.write(f"Processed: {file_name}\n")
+                    except Exception as e:
+                        print(f"Error processing {file_name}: {e}")
+                        log.write(f"Error processing {file_name}: {e}\n")
 
     if summary:
         print("\nSummary Report:")
-        for entry in summary:
-            print(entry)
+        for item in summary:
+            print(item)
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Command Line Photo Editor",
-        epilog="""Author: Your Name
-        This tool allows you to perform various image processing operations from the command line. 
-        You can resize, rotate, crop, and apply various filters and effects to images. 
-        For batch processing, specify a directory as input and output, and use --batch flag.
-        Usage examples:
-        python photo_editor.py input_image.jpg output_image.jpg --resize 800 600 --blur 2
-        python photo_editor.py input_directory output_directory --batch --resize 1024 768 --sharpen"""
+        description="Image Processing Tool",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog="""Usage Examples:
+        python image_tool.py --input input.jpg --output output.jpg --resize 800 600
+        python image_tool.py --input input.jpg --output output.jpg --rotate 90
+        python image_tool.py --input input.jpg --output output.jpg --grayscale
+        python image_tool.py --input input.jpg --output output.jpg --crop 10 10 200 200
+        python image_tool.py --input input.jpg --output output.jpg --brightness 1.5
+        python image_tool.py --input input.jpg --output output.jpg --blur 2
+        python image_tool.py --input input.jpg --output output.jpg --contrast 1.3
+        python image_tool.py --input input.jpg --output output.jpg --text "Hello World" --text_position 100 100 --text_size 20 --text_color "blue"
+        python image_tool.py --input input.jpg --output output.jpg --overlay overlay.png --overlay_opacity 0.5
+        """
     )
-    parser.add_argument("input", type=str, help="Path to the input image or directory")
-    parser.add_argument("output", type=str, help="Path to save the output image or directory")
+
+    parser.add_argument("--input", required=True, help="Input image path or directory")
+    parser.add_argument("--output", required=True, help="Output image path or directory")
     parser.add_argument("--resize", type=int, nargs=2, metavar=('width', 'height'), help="Resize the image to the specified width and height")
     parser.add_argument("--rotate", type=int, metavar='angle', help="Rotate the image by the specified angle")
     parser.add_argument("--grayscale", action='store_true', help="Convert the image to grayscale")
-    parser.add_argument("--crop", type=int, nargs=4, metavar=('left', 'upper', 'right', 'lower'), help="Crop the image with the specified bounding box")
-    parser.add_argument("--flip", type=str, choices=['horizontal', 'vertical'], help="Flip the image horizontally or vertically")
+    parser.add_argument("--crop", type=int, nargs=4, metavar=('left', 'upper', 'right', 'lower'), help="Crop the image with the specified coordinates")
+    parser.add_argument("--flip", choices=['horizontal', 'vertical'], help="Flip the image horizontally or vertically")
     parser.add_argument("--brightness", type=float, metavar='factor', help="Adjust the brightness of the image. 1.0 means no change")
-    parser.add_argument("--blur", type=float, metavar='radius', help="Apply a Gaussian blur to the image with the specified radius")
+    parser.add_argument("--blur", type=float, metavar='radius', help="Apply Gaussian blur to the image")
     parser.add_argument("--contrast", type=float, metavar='factor', help="Adjust the contrast of the image. 1.0 means no change")
     parser.add_argument("--sharpen", action='store_true', help="Apply sharpening filter to the image")
     parser.add_argument("--edge_enhance", action='store_true', help="Apply edge enhancement filter to the image")
@@ -225,6 +276,10 @@ def main():
     parser.add_argument("--color_transform", type=float, nargs=12, metavar='matrix', help="Apply a color transformation matrix to the image")
     parser.add_argument("--format", type=str, choices=['JPEG', 'PNG', 'BMP', 'GIF'], help="Convert the image to the specified format")
     parser.add_argument("--batch", action='store_true', help="Process all images in the input directory")
+    parser.add_argument("--overlay", type=str, metavar='overlay_path', help="Overlay another image onto the input image")
+    parser.add_argument("--overlay_opacity", type=float, metavar='opacity', help="Opacity of the overlay image")
+    parser.add_argument("--histogram", action='store_true', help="Display the histogram of the image")
+    parser.add_argument("--filter", choices=['emboss', 'contour', 'find_edges', 'detail', 'edge_enhance_more'], help="Apply a filter to the image")
 
     args = parser.parse_args()
 
