@@ -20,6 +20,11 @@ class ImageEditorApp:
         self.color_picker_start = None
         self.undo_stack = deque()
         self.redo_stack = deque()
+        self.draw_tool = None
+        self.shape_start_x = None
+        self.shape_start_y = None
+        self.font_style = "arial.ttf"
+        self.font_size = 20
 
         self.create_widgets()
 
@@ -51,12 +56,16 @@ class ImageEditorApp:
         edit_menu.add_command(label="Replace Color", command=self.replace_color)
         edit_menu.add_command(label="Sepia", command=self.apply_sepia)
         edit_menu.add_command(label="Invert Colors", command=self.invert_colors)
-        edit_menu.add_command(label="Undo", command=self.undo)
-        edit_menu.add_command(label="Redo", command=self.redo)
         edit_menu.add_command(label="Flip Horizontal", command=self.flip_horizontal)
         edit_menu.add_command(label="Flip Vertical", command=self.flip_vertical)
         edit_menu.add_command(label="Rotate 90 CW", command=self.rotate_90_cw)
         edit_menu.add_command(label="Rotate 90 CCW", command=self.rotate_90_ccw)
+        edit_menu.add_command(label="Apply Emboss", command=self.apply_emboss)
+        edit_menu.add_command(label="Apply Edge Enhance", command=self.apply_edge_enhance)
+        edit_menu.add_command(label="Apply Edge Enhance More", command=self.apply_edge_enhance_more)
+        edit_menu.add_command(label="Apply Gaussian Blur More", command=self.apply_gaussian_blur_more)
+        edit_menu.add_command(label="Draw Rectangle", command=self.initiate_rectangle_draw)
+        edit_menu.add_command(label="Draw Ellipse", command=self.initiate_ellipse_draw)
 
         self.canvas = tk.Canvas(self.root, bg='white')
         self.canvas.pack(fill=tk.BOTH, expand=True)
@@ -172,6 +181,10 @@ class ImageEditorApp:
             self.canvas.unbind("<ButtonPress-1>")
             self.canvas.unbind("<B1-Motion>")
             self.canvas.unbind("<ButtonRelease-1>")
+            self.crop_start_x = None
+            self.crop_start_y = None
+            self.crop_end_x = None
+            self.crop_end_y = None
 
     def add_text(self):
         if self.image:
@@ -179,23 +192,22 @@ class ImageEditorApp:
             x = simpledialog.askinteger("Add Text", "Enter x coordinate for text:")
             y = simpledialog.askinteger("Add Text", "Enter y coordinate for text:")
             color = colorchooser.askcolor()[1]
-            font_size = simpledialog.askinteger("Add Text", "Enter font size:", initialvalue=20)
-            if text and x is not None and y is not None and color and font_size:
+            font_style = simpledialog.askstring("Add Text", "Enter font style (e.g., 'arial.ttf'):", initialvalue=self.font_style)
+            font_size = simpledialog.askinteger("Add Text", "Enter font size:", initialvalue=self.font_size)
+            if text and x is not None and y is not None and color:
                 self.push_undo()
                 draw = ImageDraw.Draw(self.image)
-                font = ImageFont.truetype("arial.ttf", font_size) if ImageFont.truetype else ImageFont.load_default()
+                font = ImageFont.truetype(font_style, font_size)
                 draw.text((x, y), text, fill=color, font=font)
                 self.display_image()
-                self.update_status(f"Added text: '{text}' at ({x}, {y})")
+                self.update_status(f"Added text '{text}' at ({x}, {y})")
 
     def apply_blur(self):
         if self.image:
-            radius = simpledialog.askfloat("Blur", "Enter blur radius:", minvalue=0.0)
-            if radius is not None:
-                self.push_undo()
-                self.image = self.image.filter(ImageFilter.GaussianBlur(radius))
-                self.display_image()
-                self.update_status(f"Applied blur with radius {radius}")
+            self.push_undo()
+            self.image = self.image.filter(ImageFilter.BLUR)
+            self.display_image()
+            self.update_status("Applied blur filter")
 
     def apply_sharpen(self):
         if self.image:
@@ -310,6 +322,51 @@ class ImageEditorApp:
             self.image = self.image.rotate(90, expand=True)
             self.display_image()
             self.update_status("Rotated 90 degrees counterclockwise")
+
+    def apply_emboss(self):
+        if self.image:
+            self.push_undo()
+            self.image = self.image.filter(ImageFilter.EMBOSS)
+            self.display_image()
+            self.update_status("Applied emboss filter")
+
+    def apply_edge_enhance(self):
+        if self.image:
+            self.push_undo()
+            self.image = self.image.filter(ImageFilter.EDGE_ENHANCE)
+            self.display_image()
+            self.update_status("Applied edge enhance filter")
+
+    def apply_edge_enhance_more(self):
+        if self.image:
+            self.push_undo()
+            self.image = self.image.filter(ImageFilter.EDGE_ENHANCE_MORE)
+            self.display_image()
+            self.update_status("Applied edge enhance more filter")
+
+    def apply_gaussian_blur_more(self):
+        if self.image:
+            self.push_undo()
+            self.image = self.image.filter(ImageFilter.GaussianBlur(radius=5))
+            self.display_image()
+            self.update_status("Applied gaussian blur more filter")
+
+    def initiate_rectangle_draw(self):
+        self.canvas.bind("<ButtonPress-1>", self.on_rectangle_start)
+        self.canvas.bind("<B1-Motion>", self.on_rectangle_draw)
+        self.canvas.bind("<ButtonRelease-1>", self.on_rectangle_end)
+
+    def on_rectangle_start(self, event):
+        if self.image:
+            self.shape_start_x = event.x
+            self.shape_start_y = event.y
+
+    def on_rectangle_draw(self, event):
+        if self.image:
+            self.canvas.delete("rectangle")
+            self.canvas.create_rectangle(self.shape_start_x, self.shape_start_y, event.x, event.y, outline="blue", tag="rectangle")
+
+
 
     def push_undo(self):
         if self.image:
